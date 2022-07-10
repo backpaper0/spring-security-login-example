@@ -1,0 +1,17 @@
+accounts:
+  - id: 1
+    username: "user"
+    expiration_date: "2999-01-01"
+    authentication_failure_count: 0
+    locked_until: null
+    enabled: true
+
+account_passwords:
+  - account_id: 1
+    hashed_password: "1N+tEPt0VjnplCfo+KiUZa+aT/YvHMIu4F0cxMeC84dO/Wxwcjec/fz179Z65Dwt"
+    expiration_date: "1999-12-31"
+    needs_to_change: false
+
+account_authorities:
+  - account_id: 1
+    authority: "AUTH1"

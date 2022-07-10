@@ -15,4 +15,8 @@ public record AccountPassword(
 	public AccountPassword passwordIsChanged() {
 		return new AccountPassword(accountId, hashedPassword, expirationDate, false);
 	}
+
+	public boolean credentialsNonExpired(LocalDate today) {
+		return !expirationDate.isBefore(today);
+	}
 }

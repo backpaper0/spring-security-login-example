@@ -26,4 +26,12 @@ public record Account(
 	public Account lock(LocalDateTime lockedUntil) {
 		return new Account(id, username, expirationDate, 0, lockedUntil, enabled);
 	}
+
+	public boolean accountNonExpired(LocalDate today) {
+		return !expirationDate.isBefore(today);
+	}
+
+	public boolean accountNonLocked(LocalDateTime now) {
+		return lockedUntil == null || lockedUntil.isBefore(now);
+	}
 }
