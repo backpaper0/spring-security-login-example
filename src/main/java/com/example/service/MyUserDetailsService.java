@@ -32,6 +32,10 @@ import com.example.repository.AccountAuthorityRepository;
 import com.example.repository.AccountPasswordRepository;
 import com.example.repository.AccountRepository;
 
+/**
+ * {@link UserDetailsService}実装クラス。
+ *
+ */
 @Component
 public class MyUserDetailsService implements UserDetailsService {
 
@@ -48,32 +52,45 @@ public class MyUserDetailsService implements UserDetailsService {
 	@Override
 	public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
 
+		// usernameが入力されていなければエラー
 		if (username == null || username.isEmpty()) {
 			throw new UsernameNotFoundException(username);
 		}
 
+		// アカウントが存在しなければエラー
 		Account account = accountRepository.findByUsername(username);
 		if (account == null) {
 			throw new UsernameNotFoundException(username);
 		}
 
+		// ハッシュ化されたパスワードを取得
 		AccountPassword accountPassword = accountPasswordRepository.findById(account.id())
+				// 取得できない場合はデータ不整合なためシステムエラーとする
 				.orElseThrow(() -> new SystemException());
 
+		// アカウントに関連付いた権限を取得
 		List<AccountAuthority> accountAuthorities = accountAuthorityRepository.findByAccountId(account.id());
 
 		LocalDate today = LocalDate.now();
 		LocalDateTime now = LocalDateTime.now();
 
+		// ハッシュ化されたパスワード
 		String password = accountPassword.hashedPassword();
+		// フラグ：アカウントが有効ならtrue
 		boolean enabled = account.enabled();
+		// フラグ：アカウントが有効期限切れでなければtrue
 		boolean accountNonExpired = account.accountNonExpired(today);
+		// フラグ：パスワードが有効期限切れでなければtrue
 		boolean credentialsNonExpired = accountPassword.credentialsNonExpired(today);
+		// フラグ：アカウントがロックされていなければtrue
 		boolean accountNonLocked = account.accountNonLocked(now);
 
+		// 権限をGrantedAuthority型へ変換
 		Collection<? extends GrantedAuthority> authorities = accountAuthorities.stream()
 				.map(AccountAuthority::authority).map(SimpleGrantedAuthority::new).toList();
 
+		// パスワードを変更する必要がなければ権限をひとつ追加する
+		// この権限がない場合はログイン後、強制的にパスワード変更画面へ遷移させる
 		if (!accountPassword.needsToChange()) {
 			authorities = Stream.concat(
 					authorities.stream(),
@@ -85,23 +102,38 @@ public class MyUserDetailsService implements UserDetailsService {
 				authorities);
 	}
 
+	/**
+	 * ログイン成功時に発火されるイベントをハンドリングする。
+	 * 
+	 * @param event ログイン成功時に発火されるイベント
+	 */
 	@Transactional
 	@EventListener(AuthenticationSuccessEvent.class)
 	public void handleSuccess(AuthenticationSuccessEvent event) {
 		String username = event.getAuthentication().getName();
 		Account account = accountRepository.findByUsername(username);
+		// ログイン失敗回数をリセットする
 		accountRepository.save(account.clearAuthenticationFailureCount());
 	}
 
+	/**
+	 * ログイン失敗時に発火されるイベントをハンドリングする。
+	 * 
+	 * @param event ログイン失敗時に発火されるイベント
+	 */
 	@Transactional
 	@EventListener(AuthenticationFailureBadCredentialsEvent.class)
 	public void handleFailureBadCredentials(AuthenticationFailureBadCredentialsEvent event) {
 		String username = event.getAuthentication().getName();
 		Account account = accountRepository.findByUsername(username);
 		if (account == null) {
+			// 存在しないアカウントのためにログイン失敗した場合は、
+			// ここでアカウントを取得できない
 			return;
 		}
+		// ログイン失敗回数をインクリメントする
 		account = account.incrementAuthenticationFailureCount();
+		// ログイン失敗回数が規定値を超えた場合はアカウントをロックする
 		if (account.authenticationFailureCount() >= webSecurityProperties.getAuthenticationFailureCountThreshold()) {
 			account = account
 					.lock(LocalDateTime.now().plusSeconds(webSecurityProperties.getLockoutTimeout().toSeconds()));
@@ -109,12 +141,18 @@ public class MyUserDetailsService implements UserDetailsService {
 		accountRepository.save(account);
 	}
 
+	/**
+	 * パスワード変更時に発火されるイベントをハンドリングする。
+	 * 
+	 * @param event パスワード変更時に発火されるイベント
+	 */
 	@EventListener(PasswordChangedEvent.class)
 	@PreAuthorize("authenticated")
 	public void handlePasswordChangedEvent(PasswordChangedEvent event) {
 		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 		Object principal = authentication.getPrincipal();
 		Object credentials = authentication.getCredentials();
+		// ログイン時と同じようにパスワード変更を強制されない権限を追加する
 		Collection<? extends GrantedAuthority> authorities = Stream
 				.concat(
 						authentication.getAuthorities().stream(),
@@ -126,6 +164,7 @@ public class MyUserDetailsService implements UserDetailsService {
 					user.isCredentialsNonExpired(), user.isAccountNonLocked(), authorities);
 		}
 		authentication = UsernamePasswordAuthenticationToken.authenticated(principal, credentials, authorities);
+		// SecurityContextへ保存されたAuthenticationを更新数r
 		SecurityContextHolder.getContext().setAuthentication(authentication);
 	}
 }

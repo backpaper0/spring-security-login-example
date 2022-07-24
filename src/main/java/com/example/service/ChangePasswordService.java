@@ -14,6 +14,10 @@ import com.example.entity.AccountPassword;
 import com.example.repository.AccountPasswordRepository;
 import com.example.repository.AccountRepository;
 
+/**
+ * パスワード変更を行うクラス。
+ *
+ */
 @Component
 public class ChangePasswordService implements ApplicationEventPublisherAware {
 
